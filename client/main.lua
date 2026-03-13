@@ -1615,6 +1615,13 @@ RegisterNUICallback('saveClothing', function(_, cb)
         end
     end
 
+    local useCorePay = Config.CoreBusiness and Config.CoreBusiness.enabled and Config.CoreBusiness.useCorePay
+    if useCorePay and shopType == "clothing" then
+        TriggerServerEvent("qb-clothing:server:requestPayment", shopType, changedCount)
+        cb('ok')
+        return
+    end
+
     if changedCount > 0 or shopType ~= "clothing" then
         TriggerServerEvent("qb-clothing:server:chargeCustomer", shopType, changedCount)
     end
@@ -1627,6 +1634,24 @@ RegisterNUICallback('saveClothing', function(_, cb)
     end
 
     cb('ok')
+end)
+
+RegisterNetEvent('qb-clothing:client:paymentResult', function(success)
+    if success then
+        SaveSkin()
+        if Config.CoreInventory and Config.CoreInventory.enabled then
+            local ped = PlayerPedId()
+            exports['core_inventory']:addClothingItemFromPedSkinInClothHolder(ped, false, true, true)
+        end
+    else
+        if previousSkinData and previousSkinData ~= "" then
+            local oldData = json.decode(previousSkinData)
+            if oldData then
+                resetClothing(oldData)
+                skinData = oldData
+            end
+        end
+    end
 end)
 -- Commands
 RegisterCommand("refreshskin", function()

@@ -106,6 +106,121 @@ RegisterServerEvent("qb-clothing:server:chargeCustomer", function(shopType, chan
     end
 end)
 
+-- ====================|| COREPAY INTEGRATION || ==================== --
+
+RegisterServerEvent("qb-clothing:server:requestPayment", function(shopType, changedCount)
+    local src = source
+    local Player = QBCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local useCorePay = Config.CoreBusiness and Config.CoreBusiness.enabled and Config.CoreBusiness.useCorePay
+
+    if shopType ~= "clothing" or not useCorePay then
+        local money = getMoneyForShop(shopType)
+        if money > 0 then
+            if Player.Functions.RemoveMoney('cash', money, shopType .. '-purchase') then
+                TriggerClientEvent('QBCore:Notify', src, 'Paid $' .. money .. ' for ' .. shopType, 'success')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+            else
+                TriggerClientEvent('QBCore:Notify', src, 'Not enough cash', 'error')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, false)
+            end
+        else
+            TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+        end
+        return
+    end
+
+    local coords = getPlayerCoords(src)
+    if not coords then
+        TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+        return
+    end
+
+    local businessId = exports['core_business']:closestPropertyGetBusinessId(coords)
+    if not businessId then
+        local money = getMoneyForShop(shopType)
+        if money > 0 then
+            if Player.Functions.RemoveMoney('cash', money, 'clothing-purchase') then
+                TriggerClientEvent('QBCore:Notify', src, 'Paid $' .. money .. ' for ' .. shopType, 'success')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+            else
+                TriggerClientEvent('QBCore:Notify', src, 'Not enough cash', 'error')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, false)
+            end
+        else
+            TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+        end
+        return
+    end
+
+    local clothingItem = Config.CoreBusiness.clothingItem
+    local amount = 0
+    local itemsToConsume = 0
+
+    if Config.CoreBusiness.consumeItems then
+        if changedCount <= 0 then
+            TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+            return
+        end
+
+        local itemCount = exports['core_business']:closestPropertyItemCount(coords, clothingItem)
+        if itemCount == 1000.0 then
+            local money = Config.ClothingCost
+            if Player.Functions.RemoveMoney('cash', money, 'clothing-purchase') then
+                TriggerClientEvent('QBCore:Notify', src, 'Paid $' .. money .. ' for clothing', 'success')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+            else
+                TriggerClientEvent('QBCore:Notify', src, 'Not enough cash', 'error')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, false)
+            end
+            return
+        end
+
+        local price = exports['core_business']:closestPropertyGetPrice(coords, clothingItem, 'sell')
+        local pricePerItem = price or Config.ClothingCost
+        itemsToConsume = math.min(changedCount, math.floor(itemCount))
+
+        if itemsToConsume <= 0 then
+            TriggerClientEvent('QBCore:Notify', src, 'Store has no clothing in stock', 'error')
+            TriggerClientEvent('qb-clothing:client:paymentResult', src, false)
+            return
+        end
+
+        amount = pricePerItem * itemsToConsume
+    else
+        local itemCount = exports['core_business']:closestPropertyItemCount(coords, clothingItem)
+        if itemCount == 1000.0 then
+            local money = Config.ClothingCost
+            if Player.Functions.RemoveMoney('cash', money, 'clothing-purchase') then
+                TriggerClientEvent('QBCore:Notify', src, 'Paid $' .. money .. ' for clothing', 'success')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+            else
+                TriggerClientEvent('QBCore:Notify', src, 'Not enough cash', 'error')
+                TriggerClientEvent('qb-clothing:client:paymentResult', src, false)
+            end
+            return
+        end
+        amount = Config.ClothingCost
+    end
+
+    if amount <= 0 then
+        TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+        return
+    end
+
+    exports['core_business']:requestCorePay(src, businessId, amount, "Clothing purchase", function(success, message)
+        if success then
+            if Config.CoreBusiness.consumeItems and itemsToConsume > 0 then
+                exports['core_business']:closestPropertyRemoveItem(coords, clothingItem, itemsToConsume)
+            end
+            TriggerClientEvent('qb-clothing:client:paymentResult', src, true)
+        else
+            TriggerClientEvent('qb-clothing:client:paymentResult', src, false)
+        end
+    end)
+end)
+
 -- ====================|| ORIGINAL EVENTS || ==================== --
 
 RegisterServerEvent("qb-clothing:saveSkin", function(model, skin)

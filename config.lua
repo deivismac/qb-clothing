@@ -518,6 +518,7 @@ Config.CoreBusiness = {
                                   -- false: just register a percentage of default price as business income
     clothingItem = "clothes",     -- Item name consumed from property stash (when consumeItems = true)
     salePercentage = 0.75,        -- When consumeItems = false, register this fraction of Config.ClothingCost as sale
+    useCorePay = true,            -- true: use CorePay signature UI for payment (bank), false: charge cash directly
 }
 
 -- Core Inventory clothing sync (core_inventory cloth holder system)
