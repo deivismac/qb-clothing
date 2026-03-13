@@ -1467,8 +1467,6 @@ end)
 RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
     TriggerServerEvent("qb-clothes:loadPlayerSkin")
     PlayerData = QBCore.Functions.GetPlayerData()
-    loadStores()
---    QBCore.Shared.Jobs = exports['qb-jobs']:AddJobs()
 end)
 RegisterNetEvent('QBCore:Client:OnJobUpdate', function(JobInfo)
     PlayerData.job = JobInfo
@@ -1659,6 +1657,17 @@ RegisterCommand("refreshskin", function()
     local health = GetEntityHealth(playerPed)
     reloadSkin(health)
 end)
+
+RegisterCommand("clothing", function()
+    customCamLocation = nil
+    openMenu({
+        {menu = "character", label = Lang:t("menu.features"), selected = true},
+        {menu = "hair", label = Lang:t("menu.hair"), selected = false},
+        {menu = "clothing", label = Lang:t("menu.character"), selected = false},
+        {menu = "accessoires", label = Lang:t("menu.accessoires"), selected = false}
+    })
+end, true)
+
 -- Threads
 Citizen.CreateThread(function()
     for k, _ in pairs (Config.Stores) do
@@ -1695,8 +1704,9 @@ Citizen.CreateThread(function()
             EndTextCommandSetBlipName(surgeonShop)
         end
     end
+    loadStores()
 end)
--- We define this as function so we don't get a nil value for job. The function triggers when the player is loaded :)
+
 function loadStores()
     if Config.UseTarget then
         CreateThread(function()
