@@ -1,5 +1,113 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
+-- ====================|| CORE BUSINESS HELPERS || ==================== --
+
+local function getPlayerCoords(source)
+    local ped = GetPlayerPed(source)
+    return ped and GetEntityCoords(ped)
+end
+
+local function getCoreBusinessClothingPrice(source)
+    if not Config.CoreBusiness or not Config.CoreBusiness.enabled or not Config.CoreBusiness.consumeItems then return nil end
+
+    local coords = getPlayerCoords(source)
+    if not coords then return nil end
+
+    local price = exports['core_business']:closestPropertyGetPrice(coords, Config.CoreBusiness.clothingItem, 'sell')
+    return price
+end
+
+local function coreBusinessProcessClothing(source, changedCount, defaultMoney)
+    if not Config.CoreBusiness or not Config.CoreBusiness.enabled then return defaultMoney, false end
+
+    local coords = getPlayerCoords(source)
+    if not coords then return defaultMoney, false end
+
+    local clothingItem = Config.CoreBusiness.clothingItem
+
+    if Config.CoreBusiness.consumeItems then
+        if changedCount <= 0 then return 0, true end
+
+        local itemCount = exports['core_business']:closestPropertyItemCount(coords, clothingItem)
+        if itemCount == 1000.0 then return defaultMoney, false end
+
+        local price = exports['core_business']:closestPropertyGetPrice(coords, clothingItem, 'sell')
+        local pricePerItem = price or Config.ClothingCost
+        local actualItems = math.min(changedCount, math.floor(itemCount))
+
+        if actualItems <= 0 then return defaultMoney, false end
+
+        exports['core_business']:closestPropertyRemoveItem(coords, clothingItem, actualItems)
+        local saleAmount = pricePerItem * actualItems
+        exports['core_business']:closestPropertyRegisterSale(coords, saleAmount, string.format("Clothing sale: %d items, $%d", actualItems, saleAmount))
+
+        return saleAmount, true
+    else
+        local itemCount = exports['core_business']:closestPropertyItemCount(coords, clothingItem)
+        if itemCount == 1000.0 then return defaultMoney, false end
+
+        local saleAmount = math.floor(defaultMoney * (Config.CoreBusiness.salePercentage or 0.75))
+        if saleAmount > 0 then
+            exports['core_business']:closestPropertyRegisterSale(coords, saleAmount, string.format("Clothing sale: $%d", saleAmount))
+        end
+
+        return defaultMoney, true
+    end
+end
+
+-- ====================|| PAYMENT HELPERS || ==================== --
+
+local function getMoneyForShop(shopType, source)
+    local money = 0
+    if shopType == "clothing" then
+        if source and Config.CoreBusiness and Config.CoreBusiness.enabled and Config.CoreBusiness.consumeItems then
+            local price = getCoreBusinessClothingPrice(source)
+            if price then return price end
+        end
+        money = Config.ClothingCost
+    elseif shopType == "barber" then
+        money = Config.BarberCost
+    elseif shopType == "surgeon" then
+        money = Config.SurgeonCost
+    end
+    return money
+end
+
+QBCore.Functions.CreateCallback('qb-clothing:server:hasMoney', function(source, cb, shopType)
+    local money = getMoneyForShop(shopType, source)
+    local Player = QBCore.Functions.GetPlayer(source)
+    if Player and Player.Functions.GetMoney('cash') >= money then
+        cb(true, money)
+    else
+        cb(false, money)
+    end
+end)
+
+RegisterServerEvent("qb-clothing:server:chargeCustomer", function(shopType, changedCount)
+    local src = source
+    local Player = QBCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local defaultMoney = getMoneyForShop(shopType)
+
+    local money = defaultMoney
+    if shopType == "clothing" then
+        local cbMoney, handled = coreBusinessProcessClothing(src, changedCount or 0, defaultMoney)
+        money = cbMoney
+        if handled and money <= 0 then return end
+    end
+
+    if money > 0 then
+        if Player.Functions.RemoveMoney('cash', money, 'clothing-purchase') then
+            TriggerClientEvent('QBCore:Notify', src, 'Paid $' .. money .. ' for ' .. shopType, 'success')
+        else
+            TriggerClientEvent('QBCore:Notify', src, 'Not enough cash', 'error')
+        end
+    end
+end)
+
+-- ====================|| ORIGINAL EVENTS || ==================== --
+
 RegisterServerEvent("qb-clothing:saveSkin", function(model, skin)
     local src = source
     local Player = QBCore.Functions.GetPlayer(src)

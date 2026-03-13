@@ -10,6 +10,7 @@ local previousSkinData = {}
 local zoneName = nil
 local inZone = false
 local removeWear = false
+local currentShopType = nil
 local skinData = {
     ["face"] =                 {item = 0,    texture = 0,  defaultItem = 0,      defaultTexture = 0},
     ["face2"] =                {item = 0,    texture = 0,  defaultItem = 0,      defaultTexture = 0},
@@ -116,6 +117,28 @@ local faceProps = {
     [5] = { ["Prop"] = -1, ["Palette"] = -1, ["Texture"] = -1 }, -- this is actually a pedtexture variations, not a prop
     [6] = { ["Prop"] = -1, ["Palette"] = -1, ["Texture"] = -1 }, -- this is actually a pedtexture variations, not a prop
 }
+-- Clothing categories that count as billable clothing changes (not face/hair/overlays)
+local billableCategories = {
+    ["arms"] = true, ["t-shirt"] = true, ["torso2"] = true, ["pants"] = true,
+    ["vest"] = true, ["shoes"] = true, ["bag"] = true, ["mask"] = true,
+    ["accessory"] = true, ["decals"] = true,
+    ["hat"] = true, ["glass"] = true, ["ear"] = true, ["watch"] = true, ["bracelet"] = true,
+}
+
+local function countChangedClothing(oldData, newData)
+    local count = 0
+    for category, _ in pairs(billableCategories) do
+        local old = oldData[category]
+        local new = newData[category]
+        if old and new then
+            if old.item ~= new.item or old.texture ~= new.texture then
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
 -- Functions
 function GetMaxValues()
     local maxModelValues = {
@@ -408,7 +431,8 @@ local function GetPositionByRelativeHeading(ped, head, dist)
 
     return finPosx, finPosy
 end
-local function openMenu(allowedMenus)
+local function openMenu(allowedMenus, shopType)
+    currentShopType = shopType or nil
     previousSkinData = json.encode(skinData)
     creatingCharacter = true
     PlayerData = QBCore.Functions.GetPlayerData()
@@ -1203,6 +1227,10 @@ RegisterNetEvent('qb-clothing:client:loadPlayerClothing', function(data, ped)
     SetPedFaceFeature(ped, 18, (data['chimp_hole'].item / 10))
     SetPedFaceFeature(ped, 19, (data['neck_thikness'].item / 10))
     skinData = data
+
+    if Config.CoreInventory and Config.CoreInventory.enabled then
+        exports['core_inventory']:addClothingItemFromPedSkinInClothHolder(ped, false, true, true)
+    end
 end)
 RegisterNetEvent('qb-clothing:client:loadOutfit', function(oData)
     local ped = PlayerPedId()
@@ -1577,7 +1605,27 @@ RegisterNUICallback('setCurrentPed', function(data, cb)
     end
 end)
 RegisterNUICallback('saveClothing', function(_, cb)
+    local shopType = currentShopType or "clothing"
+    local changedCount = 0
+
+    if shopType == "clothing" and previousSkinData and previousSkinData ~= "" then
+        local oldData = json.decode(previousSkinData)
+        if oldData then
+            changedCount = countChangedClothing(oldData, skinData)
+        end
+    end
+
+    if changedCount > 0 or shopType ~= "clothing" then
+        TriggerServerEvent("qb-clothing:server:chargeCustomer", shopType, changedCount)
+    end
+
     SaveSkin()
+
+    if Config.CoreInventory and Config.CoreInventory.enabled then
+        local ped = PlayerPedId()
+        exports['core_inventory']:addClothingItemFromPedSkinInClothHolder(ped, false, true, true)
+    end
+
     cb('ok')
 end)
 -- Commands
@@ -1635,7 +1683,7 @@ function loadStores()
                             customCamLocation = nil
                             openMenu({
                                 {menu = "hair", label = Lang:t("menu.hair"), selected = true},
-                            })
+                            }, "barber")
                         end,
                         icon = "fas fa-chair-office",
                         label = Lang:t("store.barber"),
@@ -1647,7 +1695,7 @@ function loadStores()
                             openMenu({
                                 {menu = "clothing", label = Lang:t("menu.character"), selected = true},
                                 {menu = "accessoires", label = Lang:t("menu.accessoires"), selected = false}
-                            })
+                            }, "clothing")
                         end,
                         icon = "fas fa-clothes-hanger",
                         label = Lang:t("store.clothing"),
@@ -1658,7 +1706,7 @@ function loadStores()
                             customCamLocation = nil
                             openMenu({
                                 {menu = "character", label = Lang:t("menu.features"), selected = true},
-                            })
+                            }, "surgeon")
                         end,
                         icon = "fas fa-scalpel",
                         label = Lang:t("store.surgeon"),
@@ -1818,7 +1866,7 @@ function loadStores()
                             customCamLocation = nil
                             openMenu({
                                 {menu = "character", label = Lang:t("menu.features"), selected = true},
-                            })
+                            }, "surgeon")
                         end
                     elseif zoneName == 'clothing' then
                         if IsControlJustReleased(0, 38) then
@@ -1826,14 +1874,14 @@ function loadStores()
                             openMenu({
                                 {menu = "clothing", label = Lang:t("menu.character"), selected = true},
                                 {menu = "accessoires", label = Lang:t("menu.accessoires"), selected = false}
-                            })
+                            }, "clothing")
                         end
                     elseif zoneName == 'barber' then
                         if IsControlJustReleased(0, 38) then
                             customCamLocation = nil
                             openMenu({
                                 {menu = "hair", label = Lang:t("menu.hair"), selected = true},
-                            })
+                            }, "barber")
                         end
                     elseif zoneName == 'outfit' then
                         if IsControlJustReleased(0, 38) then

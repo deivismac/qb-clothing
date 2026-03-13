@@ -506,6 +506,25 @@ Config.ManPlayerModels = {
 Config.LoadedManModels = {}
 Config.LoadedWomanModels = {}
 
+-- Shop pricing (per changed clothing category)
+Config.ClothingCost = 100
+Config.BarberCost = 100
+Config.SurgeonCost = 100
+
+-- Core Business integration (clothing_store property type)
+Config.CoreBusiness = {
+    enabled = true,               -- Enable/disable core_business integration
+    consumeItems = true,          -- true: consume 'clothes' items from property stash per changed category
+                                  -- false: just register a percentage of default price as business income
+    clothingItem = "clothes",     -- Item name consumed from property stash (when consumeItems = true)
+    salePercentage = 0.75,        -- When consumeItems = false, register this fraction of Config.ClothingCost as sale
+}
+
+-- Core Inventory clothing sync (core_inventory cloth holder system)
+Config.CoreInventory = {
+    enabled = false,              -- Set to true if using core_inventory; syncs clothing items to the cloth holder after customization
+}
+
 -- Set to true or false or GetConvar('UseTarget', 'false') == 'true' to use global option or script specific
 -- These have to be a string thanks to how Convars are returned.
 Config.UseTarget = GetConvar('UseTarget', 'false') == 'true'
