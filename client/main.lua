@@ -962,6 +962,41 @@ local function SaveSkin()
     local clothing = json.encode(skinData)
     TriggerServerEvent("qb-clothing:saveSkin", model, clothing)
 end
+
+-- Reverse sync from Core Inventory. Core Inventory changes clothing components directly on
+-- the ped and broadcasts a neutral 'clothingChanged' event. qb-clothing's cached skinData is
+-- only updated through the clothing menu, so without this it stays stale and the
+-- character-selection/spawn preview shows the old outfit. We refresh ONLY the clothing slots
+-- in skinData from the live ped (face/hair/overlays are left untouched), then save.
+local coreInvClothingTypes = { variation = true, prop = true, mask = true }
+local function SyncSkinFromPed()
+    local ped = PlayerPedId()
+    for category, info in pairs(clothingCategories) do
+        if coreInvClothingTypes[info.type] and skinData[category] then
+            if info.type == 'prop' then
+                skinData[category].item = GetPedPropIndex(ped, info.id)
+                skinData[category].texture = GetPedPropTextureIndex(ped, info.id)
+            else -- variation / mask are both drawable components
+                skinData[category].item = GetPedDrawableVariation(ped, info.id)
+                skinData[category].texture = GetPedTextureVariation(ped, info.id)
+            end
+        end
+    end
+end
+
+local coreInvSyncPending = false
+RegisterNetEvent('core_inventory:client:clothingChanged', function()
+    if not (Config.CoreInventory and Config.CoreInventory.enabled) then return end
+    if coreInvSyncPending then return end
+    coreInvSyncPending = true
+    CreateThread(function()
+        Wait(400) -- debounce rapid multi-item changes into a single save
+        coreInvSyncPending = false
+        SyncSkinFromPed()
+        SaveSkin()
+    end)
+end)
+
 local function loadAnimDict( dict )
     while ( not HasAnimDictLoaded( dict ) ) do
         RequestAnimDict( dict )
